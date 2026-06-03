@@ -1,51 +1,66 @@
-## Technical Constraints
-
-These are non-negotiable and must be respected throughout:
-
-**1. Do not trigger evaluation of perSystem files during haumea's load pass.**
-Files under `perSystem/` return functions. Those functions must remain unevaluated until flake-parts calls them. Any transformer logic that forces a perSystem value — even accidentally, e.g. via `//` on a function, or `?` on a value that turns out to be a function — is incorrect.
-
-**2. Preserve `builtins.functionArgs` on the final `perSystem` function.**
-flake-parts uses `builtins.functionArgs` to determine which arguments to pass to a `perSystem` module. A function constructed in Nix (a lambda) has no `functionArgs`. Therefore, the function delivered to flake-parts as the value of `perSystem` must have an **explicit named parameter signature**, not be an opaque constructed lambda. This means the transformer must wrap the assembled perSystem subtree in a function with an explicit `{ pkgs, lib, system, inputs', self', config, ... }:` signature.
-
-**3. `liftDefault` applies uniformly, including inside `perSystem/`.**
-`default.nix` always means "I am the value of my parent directory." This applies inside `perSystem/` exactly as it does everywhere else. The perSystem transformer must implement its own `liftDefault` logic for the perSystem subtree — it cannot delegate to the general `liftDefault` transformer, because that transformer would attempt to evaluate perSystem functions in the wrong context.
-
-**4. The general case must not be broken.**
-The existing working behavior for `flake/`, `imports.nix`, `systems.nix`, and all other non-perSystem paths must continue to work exactly as before. Changes must be surgical and isolated to perSystem handling.
-
-**5. flake-parts' module structure is authoritative.**
-We do not try to work around flake-parts' module system, type checking, or option validation. If flake-parts rejects something, the library is wrong, not flake-parts. Valid `perSystem` option names are defined by flake-parts and any loaded flake-parts modules; we do not attempt to enumerate or validate them ourselves.
-
-**6. Files work "naked" or with function arguments.**
-A file may return a plain value (no function wrapping) or a function. Both must be handled. For perSystem files, a plain value becomes a constant across all systems; a function is called with perSystemArgs. This is consistent with how the general case handles files.
+Here is a complete, rewritten `DESIGN.md` for the `haumeaParts` repository. This version synthesizes the core mechanics of `haumea` and `flake-parts`, incorporates the corrected Nix module system constraints we discussed, and serves as a comprehensive architectural blueprint for the project.
 
 ---
 
+# Architecture & Design of haumeaParts
 
+This document outlines the internal architecture, technical constraints, and design decisions behind `haumeaParts`. It is intended for maintainers and contributors who want to understand how the library bridges the gap between `haumea` and `flake-parts`.
 
-## The Implementation: Two Files
+## 1. The Core Problem: Eager vs. Deferred Evaluation
 
-All the work lives in two files within the haumea library source:
+`haumeaParts` exists to bridge two libraries with fundamentally different evaluation models:
 
-### `lib/loaders/scoped.nix`
+* **haumea (Eager):** Designed to crawl a directory tree and immediately load `.nix` files into a static attribute set. It processes files at load time.
+* **flake-parts (Deferred):** Structured as a Nix module system. While top-level flake outputs can be static, the `perSystem` outputs are strictly deferred. They are defined as functions that require per-system arguments (like `pkgs`, `system`, and `config`), which are only injected later by `mkFlake` during module evaluation.
 
-This is the **loader** for files matched as being inside `perSystem/`. Its job: import the file with `scopedImport` (injecting `inputs` into scope), and return the result **as-is** — if it's a function, return the function directly so that `builtins.functionArgs` is preserved. Do not wrap it in another lambda.
+**The Conflict:** If `haumea` eagerly evaluates a file under `perSystem/` that expects `pkgs`, it crashes because `pkgs` does not exist in the initial load context. Therefore, `haumeaParts` must intercept the `perSystem/` directory, suppress haumea's eager evaluation, and safely construct a tree of functions that `flake-parts` can evaluate later.
 
-```nix
-inputs: path:
-  let content = builtins.scopedImport inputs path;
-  in if builtins.isFunction content
-     then content          # return directly — functionArgs intact
-     else _: content       # wrap plain values as constant functions
-```
+## 2. Technical Constraints
 
-### `lib/transformers/liftDefault.nix`
+To successfully interface with the Nix module system, `haumeaParts` must strictly adhere to the following constraints:
 
-This is the **transformer** that post-processes the assembled haumea attrset. It runs at every node in the tree. Its responsibilities:
+### I. Suppress Evaluation in `perSystem/`
 
-- **Inside `perSystem/`** (cursor contains `"perSystem"` but is not `["perSystem"]`): apply `liftDefault` semantics safely, without evaluating any functions. When a node has a `default` key alongside siblings, merge them lazily.
+Files under the `perSystem/` directory must remain unevaluated during haumea's load pass. Any transformer logic that forces the evaluation of a `perSystem` node—even accidentally (e.g., via checking a type or attempting to merge a function with `//`)—will result in an evaluation error.
 
-- **At `cursor == ["perSystem"]`**: the entire perSystem subtree has been assembled into a tree of deferred functions. Wrap it in a single function with an explicit named signature that flake-parts can inspect, which recursively calls the deferred functions when invoked.
+### II. Preserve `builtins.functionArgs` for `flake-parts`
 
-- **Everywhere else**: pass through untouched — the general `liftDefault` transformer handles it.
+The Nix module system uses `builtins.functionArgs` to detect which arguments a module requires.
+
+* If a function is wrapped in a generic bare lambda (e.g., `args: ...`), `builtins.functionArgs` returns `{}`, and `flake-parts` will fail to inject necessary arguments.
+* The final constructed `perSystem` function must explicitly declare its required arguments. Ideally, this should be done dynamically using `lib.setFunctionArgs` to merge the argument requirements of all leaf nodes, ensuring compatibility with custom arguments injected by third-party `flake-parts` modules. *(Note: If a static signature is used as a fallback, it must explicitly list all standard flake-parts arguments).*
+
+### III. Function Composition over Merging (The `liftDefault` rule)
+
+In a standard haumea tree, `default.nix` means "I am the value of my parent directory," and is merged with its siblings.
+Inside `perSystem/`, the nodes are *functions*, not attribute sets. Functions cannot be merged using standard attribute set updates (`//`). Therefore, to apply `liftDefault` semantics inside `perSystem/`, the transformer must construct a **new composite function**. When evaluated, this composite function passes the arguments to the `default.nix` function, passes the arguments to all sibling functions, and *then* merges the resulting attribute sets.
+
+### IV. Non-Interference
+
+The existing working behavior for `flake/`, `imports.nix`, `systems.nix`, and all other non-perSystem paths must continue to work exactly as standard `haumea` dictates. Custom logic must be surgically isolated to the `perSystem` subtree.
+
+### V. Module System Authority
+
+We do not attempt to work around `flake-parts`' type checking or option validation. Valid `perSystem` option names are defined by `flake-parts` modules. `haumeaParts` acts purely as a delivery mechanism; if `flake-parts` rejects the resulting structure, our delivery mechanism is wrong.
+
+## 3. The Implementation Pipeline
+
+The execution of `haumeaParts` relies on intercepting the `haumea` assembly line using custom loaders and transformers.
+
+### Phase 1: The Loader (`lib/loaders/scoped.nix`)
+
+The loader targets files matched inside the `perSystem/` tree. Its primary job is normalization without evaluation.
+Files can be written "naked" (returning a plain value) or as a function. The loader ensures everything becomes a function:
+
+1. **Functions:** Returned exactly as-is to preserve their `functionArgs`.
+2. **Plain Values:** Wrapped in a constant function (`_: content`), making them consistent with the rest of the tree.
+
+### Phase 2: The Inner Transformer (`lib/transformers/liftDefault.nix`)
+
+This transformer operates *inside* the `perSystem/` tree (where the cursor contains `"perSystem"` but is not exactly `["perSystem"]`).
+It implements the **Function Composition** constraint described above. It safely restructures the tree by collapsing `default.nix` files into their parent directories by wrapping the sibling functions into unified composite functions, ensuring no leaf nodes are actually evaluated during the traversal.
+
+### Phase 3: The Master Wrapper
+
+At the root of the perSystem tree (`cursor == ["perSystem"]`), the entire subtree has been assembled into a single composite function by the previous phases.
+This final transformer acts as the gatekeeper to `flake-parts`. It wraps the composite function, ensuring the outer layer possesses the correct `builtins.functionArgs` metadata. When `flake-parts` eventually calls this master function with per-system arguments, the master function traverses the tree, evaluates every leaf with those arguments, and returns the final evaluated attribute set to the module system.
