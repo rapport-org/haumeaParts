@@ -141,12 +141,8 @@ outputs = {self, ...} @ inputs:
     inputs.haumea.lib.load {
       src = ./_attrs;
       inputs = {inherit inputs;};
-
-      #loader = inputs.haumeaParts.lib.loaders.default;
-      # (alternatively, and equivalently)
-      loader =
-        # loader operates as a first match wins system
-        inputs.haumeaParts.lib.loaders
+      # loader operates as a first match wins system
+      loader = inputs.haumeaParts.lib.loaders.dispatch
           [
             # handle the perSystem case w/ a special loader before the general case
             { runIf = ctx: builtins.match ".*/perSystem/(.*\.nix)?$" (builtins.toString ctx.path) != null;
@@ -154,10 +150,8 @@ outputs = {self, ...} @ inputs:
             # handle the general case w/ a normal loader
             { runFn = inputs.haumea.lib.loaders.scoped; }
           ];
-
-      #transformer = inputs.haumeaParts.lib.transformers.default;
-      # (alternatively, and equivalently)
       # transformers operate as an assembly line of sequential (potential) match-action modifications
+      transformer = 
       [
         #(inputs.haumea.lib.transformers.trace {})
         (inputs.haumeaParts.lib.transformers.match
