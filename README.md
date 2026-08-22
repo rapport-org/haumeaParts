@@ -27,7 +27,7 @@ _attrs/
   foo.nix        →  { foo = <value>; }
   bar/
     baz.nix      →  { bar.baz = <value>; }
-    default.nix  →  { bar = <value>; }   # liftDefault: default.nix hoists to parent
+    default.nix  →  <value>   # liftDefault: default.nix hoists to parent, which means that this 'value' is used for the value for 'bar'
 ```
 
 `default.nix` always means "I am the value of my parent directory." If you want a `default` key in the output, you return `{ default = ...; }` from inside `default.nix`. This convention is enforced uniformly — no exceptions.
