@@ -32,7 +32,7 @@ _attrs/
 
 `default.nix` always means "I am the value of my parent directory." If you want a `default` key in the output, you return `{ default = ...; }` from inside `default.nix`. This convention is enforced uniformly — no exceptions.
 
-haumea supports **loaders** (how individual files are imported) and **transformers** (how the assembled attrset is post-processed at each node). It also supports `scopedImport`, which injects names into a file's top-level scope without the file needing to explicitly receive them as function arguments.
+haumea supports **loaders** (how individual files are imported) and **transformers** (how the assembled attrset is post-processed at each node). It also supports `scopedImport`, which injects names into a file's top-level scope. For the general (non-`perSystem`) case, `inputs` is injected this way. Files under `perSystem/` must declare `pkgs`, `lib`, `system`, and other system-specific names as explicit named function arguments — they are **not** available via ambient scope injection.
 
 ### flake-parts
 
