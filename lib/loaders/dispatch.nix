@@ -3,7 +3,7 @@
 # Accepts a list of policies — each an attrset pairing a match predicate with an action:
 #
 #   runIf  : bool | (ctx -> bool)    match predicate;   default: true  (always match)
-#   runFn  : inputs -> path -> a     loader thunk to invoke;  default: loaders.scoped
+#   runFn  : inputs -> path -> a     loader thunk to invoke;  required (no default)
 #   logIf  : bool | (ctx -> bool)    enable tracing;    default: false
 #   logPfx : string                  trace prefix;      default: "[dispatch]"
 #   logSfx : string                  trace suffix note; default: ""n
@@ -17,7 +17,6 @@ let
   default = {
     # if no runIf condition is provided, default to match. This helps minimize boilerplate.
     runIf = true;
-    runFn = fnArgs.loaders.scoped;
     logIf = false;
     logFn = builtins.trace;
     logPfx = "[L] :dispatch:\t";

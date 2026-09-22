@@ -1,7 +1,9 @@
 # loaders/scopedPartsPerSystem.nix
 { ... }:
-inputs: path: newCtx:
+inputs: path:
 let
-  imported = builtins.scopedImport (inputs // newCtx) path;
+  content = builtins.scopedImport inputs path;
 in
-if builtins.isFunction imported then imported newCtx else imported
+if builtins.isFunction content
+then content
+else _: content
