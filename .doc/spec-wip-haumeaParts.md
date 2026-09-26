@@ -106,9 +106,14 @@ The line `policy.runFn or default.runFn or (throw "...")` must throw because `de
 
 **Behavior:**
 - If `mod` has a `default` key and **no siblings**: return `mod.default` directly (the function or value).
-- If `mod` has a `default` key and **siblings present**, and `mod.default` is a function: return `args: siblings // (mod.default args)`, deferring both sides to evaluation time.
-- If `mod` has a `default` key and **siblings present**, and `mod.default` is not a function: return `siblings // mod.default`.
+- If `mod` has a `default` key and **siblings present**, and `mod.default` is a function: return `args: merge siblings (mod.default args)`, deferring both sides to evaluation time.
+- If `mod` has a `default` key and **siblings present**, and `mod.default` is not a function: return `merge siblings mod.default`.
 - If `mod` has no `default` key: return `mod` unchanged.
+
+`merge` is a disjoint union, matching upstream haumea's `liftDefault` (`lib.attrsets.unionOfDisjoint`), inlined to keep the library dependency-free:
+
+- **Key collisions are an error.** If `default.nix` produces a top-level key with the same name as a sibling file or directory, accessing that key throws, naming the cursor and every colliding key. The error is lazy: the key still appears in `attrNames`, and non-colliding keys resolve normally. For the function case the default's keys are only known once it is called, so the check happens then.
+- **Only an attrset can be merged with siblings.** If `default.nix` returns a non-attrset (string, list, …) or a derivation while siblings exist, `merge` throws. A derivation is rejected because the siblings would otherwise silently become attributes of the derivation.
 
 ---
 
