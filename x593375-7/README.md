@@ -32,6 +32,8 @@ _attrs/
 
 `default.nix` always means "I am the value of my parent directory." If you want a `default` key in the output, you return `{ default = ...; }` from inside `default.nix`. This convention is enforced uniformly — no exceptions.
 
+When `default.nix` sits beside sibling files, its output and the siblings must not share key names. If `bar/default.nix` returns `{ baz = ...; }` next to `bar/baz.nix`, accessing `bar.baz` is an evaluation error. haumea's `liftDefault` does this via `unionOfDisjoint`, and the haumeaParts `perSystem` variant does the same, adding the cursor to the message. In that case `default.nix` must also return an attrset (not a string or derivation), since there is nothing else to merge the siblings into.
+
 haumea supports **loaders** (how individual files are imported) and **transformers** (how the assembled attrset is post-processed at each node). It also supports `scopedImport`, which injects names into a file's top-level scope. For the general (non-`perSystem`) case, `inputs` is injected this way. Files under `perSystem/` must declare `pkgs`, `lib`, `system`, and other system-specific names as explicit named function arguments — they are **not** available via ambient scope injection.
 
 ### flake-parts
