@@ -4,30 +4,29 @@
   outputs = { ... }:
     let
       systems = [ "x86_64-linux" "aarch64-linux" "x86_64-darwin" "aarch64-darwin" ];
-      forAllSystems = nixpkgs.lib.genAttrs systems;
+      forAllSystems = f: builtins.listToAttrs (map (s: { name = s; value = f s; }) systems);
 
-      # Evaluate tests once — pure Nix, no system dependency.
-      # Any false value or evaluation error here surfaces as a flake-eval failure.
-      testResults = import ./tests;
-      failures    = builtins.filter (n: !testResults.${n}) (builtins.attrNames testResults);
+      testRunResults = import ./tests;
+      testRunFailures    = builtins.filter (n: !testRunResults.${n}) (builtins.attrNames testRunResults);
 
     in {
-      lib.loaders.dispatch        = import ./lib/loaders/dispatch.nix        {};
-      lib.loaders.scoped          = import ./lib/loaders/scoped.nix          {};
+      lib.loaders.dispatch         = import ./lib/loaders/dispatch.nix        {};
+      lib.loaders.scoped           = import ./lib/loaders/scoped.nix          {};
       lib.transformers.liftDefault = import ./lib/transformers/liftDefault.nix {};
-      lib.transformers.match      = import ./lib/transformers/match.nix       {};
-      lib.transformers.trace      = import ./lib/transformers/trace.nix       {};
-      lib.transformers.wrap       = import ./lib/transformers/wrap.nix        {};
+      lib.transformers.match       = import ./lib/transformers/match.nix       {};
+      lib.transformers.trace       = import ./lib/transformers/trace.nix       {};
+      lib.transformers.wrap        = import ./lib/transformers/wrap.nix        {};
 
-      checks = forAllSystems (system:
-        let pkgs = nixpkgs.legacyPackages.${system};
-        in {
-          # Test failures throw at eval time (before any build is attempted),
-          # so `nix flake check` reports them as evaluation errors with test names.
-          loaders = if failures != []
-            then builtins.throw "haumeaParts: tests failed — ${builtins.concatStringsSep ", " failures}"
-            else pkgs.runCommand "haumeaParts-tests" {} "touch $out";
-        }
-      );
+      checks = forAllSystems (system: {
+        # Failures throw at eval time; success builds a trivial sentinel derivation.
+        loaders = if testRunFailures != []
+          then builtins.throw "haumeaParts: tests failed — ${builtins.concatStringsSep ", " testRunFailures}"
+          else builtins.derivation {
+            name    = "haumeaParts-tests";
+            system  = system;
+            builder = "/bin/sh";
+            args    = [ "-c" ": > $out" ];
+          };
+      });
     };
 }
