@@ -1,9 +1,7 @@
 {
   description = "Libs to extend Haumea with Flake-Parts support";
 
-  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
-
-  outputs = { nixpkgs, ... }:
+  outputs = { ... }:
     let
       systems = [ "x86_64-linux" "aarch64-linux" "x86_64-darwin" "aarch64-darwin" ];
       forAllSystems = nixpkgs.lib.genAttrs systems;
