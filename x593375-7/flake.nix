@@ -10,12 +10,16 @@
       testRunFailures    = builtins.filter (n: !testRunResults.${n}) (builtins.attrNames testRunResults);
 
     in {
+      lib.loaders.default          = import ./lib/loaders/default.nix         {};
+      lib.transformers.default     = import ./lib/transformers/default.nix     {};
       lib.loaders.dispatch         = import ./lib/loaders/dispatch.nix        {};
       lib.loaders.scoped           = import ./lib/loaders/scoped.nix          {};
       lib.transformers.liftDefault = import ./lib/transformers/liftDefault.nix {};
       lib.transformers.match       = import ./lib/transformers/match.nix       {};
       lib.transformers.trace       = import ./lib/transformers/trace.nix       {};
       lib.transformers.wrap        = import ./lib/transformers/wrap.nix        {};
+      lib.predicates               = import ./lib/predicates.nix               {};
+      lib.policies                 = import ./lib/policies.nix                 {};
 
       checks = forAllSystems (system: {
         # Failures throw at eval time; success builds a trivial sentinel derivation.
