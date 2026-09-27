@@ -20,6 +20,7 @@ let
         typeOf
         runIf
         logIf
+        logPfx
         ;
     };
   default = {
@@ -32,20 +33,9 @@ let
   ##
   typeOf = builtins.typeOf mod;
   runIf = evalPred (if ctx ? runIf then ctx.runIf else default.runIf) fullCtx; # render runIf to bool
-  logIf = evalPred (
-    if ctx ? logIf then
-      ctx.logIf
-    else if default ? logIf then
-      default.logIf
-    else
-      runIf
-  ) ctx; # render logIf to bool, default: trace only on runIf
+  logIf = evalPred (ctx.logIf or default.logIf) fullCtx; # render logIf to bool, default: false
+  logPfx = ctx.logPfx or default.logPfx;
   logFn = data: (import ./trace.nix { }) fullCtx cursor data;
-  result = innerFunc cursor mod;
+  out = if runIf then innerFunc cursor mod else mod;
 in
-if logIf && runIf then
-  logFn result
-else if runIf then
-  result
-else
-  logFn mod
+if logIf then logFn out else out

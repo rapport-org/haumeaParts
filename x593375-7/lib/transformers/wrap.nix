@@ -1,4 +1,10 @@
-# transformers/wrapPartsPerSystem.nix
+# transformers/wrap.nix
+#
+# Every function node under perSystem/ is called by lazyWrap with the args
+# named below plus the module system's own (options, specialArgs, _class,
+# _prefix), so leaf files must accept `...`. Other `_module.args` are not
+# passed; read them as `config._module.args.<name>`. Attrsets with `__functor`
+# are walked like any attrset (their `__functor` gets called with the args).
 { ... }:
 cursor: mod:
 let

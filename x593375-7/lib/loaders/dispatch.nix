@@ -5,10 +5,10 @@
 #   runIf  : bool | (ctx -> bool)    match predicate;   default: true  (always match)
 #   runFn  : inputs -> path -> a     loader thunk to invoke;  required (no default)
 #   logIf  : bool | (ctx -> bool)    enable tracing;    default: false
-#   logPfx : string                  trace prefix;      default: "[dispatch]"
-#   logSfx : string                  trace suffix note; default: ""n
+#   logPfx : string                  trace prefix;      default: "[L] :dispatch:\t"
+#   logSfx : string                  trace suffix note; default: ""
 #
-# ctx is: { path, inputs }
+# runIf sees { path, inputs }; logIf and logFmt see the full ctx (incl. policy and result).
 # Policies are evaluated in order — first match wins, action is invoked.
 # The action (runFn) is never called until its policy is selected.
 { ... }@fnArgs:
@@ -25,7 +25,7 @@ let
       ctx:
       [
         "${ctx.logPfx}"
-        "path=${ctx.path}"
+        "path=${toString ctx.path}"
         "runIf=${if ctx.runIf then "true" else "false"}"
         "type=${builtins.typeOf ctx.result}"
       ]
@@ -44,7 +44,7 @@ let
   firstMatch =
     ctx: remaining:
     if remaining == [ ] then
-      builtins.throw "${default.logPfx} disjoint policies - no policy match found for path '${ctx.path}'"
+      builtins.throw "${default.logPfx} disjoint policies - no policy match found for path '${toString ctx.path}'"
     else
       let
         policy = builtins.head remaining;
@@ -76,15 +76,8 @@ let
   matchCtx = { inherit path inputs; };
   policy = firstMatch matchCtx policies;
   result = runFn inputs path;
-  runIf = evalPred (if policy ? runIf then policy.runIf else default.runIf) ctx; # render runIf to bool
-  logIf = evalPred (
-    if policy ? logIf then
-      policy.logIf
-    else if default ? logIf then
-      default.logIf
-    else
-      policy.runIf
-  ) ctx; # render logIf to bool, default: trace only on runIf
+  runIf = true; # the selected policy matched by construction; not re-evaluated
+  logIf = evalPred (policy.logIf or default.logIf) ctx; # render logIf to bool, default: false
   runFn = policy.runFn or default.runFn or (throw "${logPfx} no loader (or default loader) provided");
   logFn = policy.logFn or default.logFn;
   logPfx = policy.logPfx or default.logPfx;
