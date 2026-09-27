@@ -1,6 +1,6 @@
 # haumeaParts — test runner
 #
-# Run standalone:  nix eval --file tests/runner.nix
+# Run standalone:  nix eval --file tests
 # Run via flake:   nix flake check
 #
 # Both directories are discovered by traversal:
@@ -23,6 +23,22 @@ let
     scoped      = import ../lib/loaders/scoped.nix {};
     dispatch    = import ../lib/loaders/dispatch.nix {};
     liftDefault = import ../lib/transformers/liftDefault.nix {};
+    wrap        = import ../lib/transformers/wrap.nix {};
+    match       = import ../lib/transformers/match.nix {};
+    trace       = import ../lib/transformers/trace.nix {};
+    predicates  = import ../lib/predicates.nix {};
+    policies    = import ../lib/policies.nix {};
+    defaultLoader       = import ../lib/loaders/default.nix {};
+    defaultTransformers = import ../lib/transformers/default.nix {};
+
+    # stands in for the haumea flake: marks which general-case pieces were used
+    haumeaStub = {
+      lib.loaders.scoped = _: _: "haumea-loaded";
+      lib.transformers.liftDefault = _: _: "haumea-lifted";
+    };
+
+    # a src whose perSystem/ subtree is fixtures/perSystem/
+    fixturesDir = ./fixtures;
 
     throws = expr: !(builtins.tryEval expr).success;
 
@@ -41,6 +57,9 @@ let
 
     # liftDefault at a representative cursor inside the perSystem subtree
     lifted = liftDefault [ "perSystem" "packages" ];
+
+    # wrap a perSystem subtree and call its resolver, as flake-parts would
+    resolve = tree: (builtins.head (wrap [ "perSystem" ] tree).imports) perSystem;
   };
 
   # Recursively collect `*.nix` under `dir` as { "<rel/path/sans/ext>" = path; },
@@ -71,7 +90,7 @@ let
   clashes = builtins.attrNames (builtins.intersectAttrs helpers fixtures);
   available =
     if clashes == [ ] then helpers // fixtures
-    else builtins.throw "tests/runner.nix: fixture name(s) shadow a helper: ${builtins.concatStringsSep ", " clashes}";
+    else builtins.throw "tests/default.nix: fixture name(s) shadow a helper: ${builtins.concatStringsSep ", " clashes}";
 
   run = name: file:
     let
