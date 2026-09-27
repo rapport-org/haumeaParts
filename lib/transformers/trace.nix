@@ -48,14 +48,7 @@ let
   keys = if builtins.isAttrs mod then builtins.toJSON (builtins.attrNames mod) else "N/A";
   ##
   runIf = if ctx ? runIf then ctx.runIf else null;
-  logIf = evalPred (
-    if ctx ? logIf then
-      ctx.logIf
-    else if default ? logIf then
-      default.logIf
-    else
-      runIf
-  ) fullCtx;
+  logIf = evalPred (ctx.logIf or default.logIf) fullCtx; # default: true
   logPfx = if ctx ? logPfx then ctx.logPfx else default.logPfx;
   logSep = if ctx ? logSep then ctx.logSep else default.logSep;
   logSfx = if ctx ? logSfx then ctx.logSfx else default.logSfx;

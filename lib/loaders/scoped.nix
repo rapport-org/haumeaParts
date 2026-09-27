@@ -1,4 +1,7 @@
-# loaders/scopedPartsPerSystem.nix
+# loaders/scoped.nix
+#
+# perSystem loader: imports with `inputs` in scope and returns the file's
+# function unevaluated; plain values are wrapped as `_: content`.
 { ... }:
 inputs: path:
 let
